@@ -1,0 +1,24 @@
+import { Router } from 'express';
+import PDFDocument from 'pdfkit';
+import { Course, Enrollment, Progress } from '../models.js';
+import { requireAuth, allowRoles } from '../middleware/auth.js';
+const router = Router();
+router.get('/:courseId', requireAuth, allowRoles('student'), async (req, res) => {
+  const course = await Course.findById(req.params.courseId);
+  if (!course) return res.status(404).json({ message: 'Course not found' });
+  if (!(await Enrollment.exists({ student: req.user.id, course: course.id }))) return res.status(403).json({ message: 'Course enrollment required' });
+  const progress = await Progress.findOne({ student: req.user.id, course: course.id });
+  const done = new Set((progress?.completedLessons || []).map(String));
+  if (!course.lessons.length || !course.lessons.every(l => done.has(String(l._id)))) return res.status(400).json({ message: 'Complete every lesson before requesting a certificate' });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="learnlive-certificate-${course.id}.pdf"`);
+  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 60 });
+  doc.pipe(res);
+  doc.fontSize(30).text('Certificate of Completion', { align: 'center' });
+  doc.moveDown(1.5).fontSize(16).text('This certificate is proudly presented to', { align: 'center' });
+  doc.moveDown().fontSize(28).text(req.user.name, { align: 'center' });
+  doc.moveDown().fontSize(16).text(`for successfully completing ${course.title}`, { align: 'center' });
+  doc.moveDown(2).fontSize(12).text(`Issued ${new Date().toLocaleDateString()}`, { align: 'center' });
+  doc.end();
+});
+export default router;
