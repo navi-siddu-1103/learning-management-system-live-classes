@@ -13,6 +13,9 @@ import quizRoutes from './routes/quizzes.js';
 import instructorRoutes from './routes/instructor.js';
 import uploadRoutes from './routes/uploads.js';
 import certificateRoutes from './routes/certificates.js';
+import path from 'node:path';
+import liveClassRoutes from './routes/liveClasses.js';
+import learningRoutes from './routes/learning.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -20,6 +23,7 @@ const io = new Server(server, { cors: { origin: process.env.CLIENT_ORIGIN || 'ht
 app.set('io', io);
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }));
 app.use(express.json({ limit: '1mb' }));
+app.use('/processed', express.static(path.resolve('processed')));
 app.use('/api', rateLimit({ windowMs: 60_000, limit: 120 }));
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'learnlive-api' }));
 app.use('/api/auth', authRoutes);
@@ -29,6 +33,9 @@ app.use('/api/quizzes', quizRoutes);
 app.use('/api/instructor', instructorRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/certificates', certificateRoutes);
+app.use('/api/live-classes', liveClassRoutes);
+app.use('/api/learning', learningRoutes);
+
 app.use((err, _req, res, _next) => {
   console.error(err);
   res.status(err.status || 500).json({ message: err.status ? err.message : 'Internal server error' });

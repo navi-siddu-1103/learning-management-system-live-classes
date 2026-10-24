@@ -16,6 +16,16 @@ import {
   ArrowRight,
 } from 'lucide-react';
 
+import {
+  LiveKitRoom,
+  VideoConference,
+  RoomAudioRenderer,
+  ControlBar,
+} from '@livekit/components-react';
+
+import '@livekit/components-styles';
+import './certificates.css';
+import { ClipboardList, CheckCircle2 } from 'lucide-react';
 // --------------------------------------------------
 // API CONFIGURATION
 // --------------------------------------------------
@@ -165,6 +175,30 @@ export default function App() {
 
   const [loading, setLoading] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
+  const [selectedCourse, setSelectedCourse] = useState(null);
+
+  const [quizzes, setQuizzes] = useState([]);
+  const [quizzesLoading, setQuizzesLoading] = useState(false);
+  const [selectedQuiz, setSelectedQuiz] = useState(null);
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [quizResult, setQuizResult] = useState(null);
+  const [quizSubmitting, setQuizSubmitting] = useState(false);
+
+  const [quizTitle, setQuizTitle] = useState('');
+  const [quizDescription, setQuizDescription] = useState('');
+  const [quizCourseId, setQuizCourseId] = useState('');
+
+  const [newQuizQuestions, setNewQuizQuestions] = useState([
+    {
+      prompt: '',
+      options: ['', '', '', ''],
+      correctOptionIndex: 0,
+      points: 1,
+    },
+  ]);
+
+const [quizSaving, setQuizSaving] = useState(false);
+
 
   const [auth, setAuth] = useState({
     name: '',
@@ -181,6 +215,10 @@ export default function App() {
     category: 'Development',
     price: 0,
   });
+  const [liveRoomName, setLiveRoomName] = useState('');
+  const [liveToken, setLiveToken] = useState('');
+  const [liveServerUrl, setLiveServerUrl] = useState('');
+  const [liveConnecting, setLiveConnecting] = useState(false);
 
   // ------------------------------------------------
   // NOTIFICATIONS
@@ -271,6 +309,33 @@ export default function App() {
     };
   }, []);
 
+  // ------------------------------------------------
+  const joinLiveClass = async () => {
+    if (!liveRoomName.trim()) {
+      flash('Please enter a meeting code.');
+      return;
+    }
+
+    setLiveConnecting(true);
+
+    try {
+      const data = await request('/live-classes/token', {
+        method: 'POST',
+        body: JSON.stringify({
+          roomName: liveRoomName.trim(),
+        }),
+      });
+
+      setLiveToken(data.token);
+      setLiveServerUrl(data.serverUrl);
+    } catch (error) {
+      flash(error.message || 'Unable to join the live class.');
+    } finally {
+      setLiveConnecting(false);
+    }
+  };
+  // ------------------------------------------------
+  
   // ------------------------------------------------
   // LOGIN AND REGISTRATION
   // ------------------------------------------------
@@ -439,8 +504,13 @@ export default function App() {
 
       flash(`You have enrolled in ${course.title}.`);
     } catch (error) {
-      console.error('Enrollment failed:', error);
-
+        if (error.message?.toLowerCase().includes('already enrolled')) {
+          setNotice('You are already enrolled in this course.');
+          await loadMyLearning();
+          return;
+        }
+        console.error('Enrollment failed:', error);
+        setNotice(error.message || 'Failed to enroll in course.');
       flash(`Enrollment failed: ${error.message}`);
     }
   }
@@ -455,11 +525,9 @@ export default function App() {
       flash('Please sign in to view your courses.');
       return;
     }
-
     setMyCoursesLoading(true);
-
     try {
-      const data = await request('/courses/my-learning');
+      const data = await request('/learning/my-learning');
       setMyCourses(data.courses || []);
     } catch (error) {
       flash(`Unable to load your courses: ${error.message}`);
@@ -467,6 +535,65 @@ export default function App() {
       setMyCoursesLoading(false);
     }
   }
+
+  async function loadQuizzes(courseId) {
+    setQuizzesLoading(true);
+    setQuizzes([]);
+    setSelectedQuiz(null);
+    setQuizAnswers({});
+    setQuizResult(null);
+
+    try {
+      const data = await request(`/quizzes/course/${courseId}`);
+      setQuizzes(data.quizzes || []);
+    } catch (error) {
+      flash(`Unable to load quizzes: ${error.message}`);
+    } finally {
+      setQuizzesLoading(false);
+    }
+  }
+
+  const downloadCertificate = async (course) => {
+    try {
+      const token = localStorage.getItem('learnlive_token');
+
+      if (!token) {
+        setNotice('Please sign in again to download your certificate.');
+        return;
+      }
+
+      const courseId = course._id || course.id;
+
+      const response = await fetch(`${API}/certificates/${courseId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || 'Failed to download certificate.');
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      link.href = downloadUrl;
+      link.download = `learnlive-certificate-${courseId}.pdf`;
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.URL.revokeObjectURL(downloadUrl);
+      setNotice('Certificate downloaded successfully!');
+    } catch (error) {
+      console.error('Certificate download error:', error);
+      setNotice(error.message || 'Unable to download certificate.');
+    }
+  };
 
   const filtered = courses.filter((course) => {
     const searchableText = [
@@ -509,7 +636,6 @@ export default function App() {
       </div>
     );
   }
-
   // ------------------------------------------------
   // RENDER APPLICATION
   // ------------------------------------------------
@@ -1064,37 +1190,836 @@ export default function App() {
         )}
 
         {/* MY LEARNING */}
+        
         {page === 'My Learning' && (
-          <section className="generic-page">
-            <span className="eyebrow">YOUR JOURNEY</span>
-            <h1>My learning<span className="period">.</span></h1>
+          <section className="generic-page my-learning-page">
+            <div className="my-learning-heading">
+              <div>
+                <span className="eyebrow">YOUR JOURNEY</span>
+                <h1>
+                  My learning<span className="period">.</span>
+                </h1>
+                <p>Pick up where you left off and keep making progress.</p>
+              </div>
 
-            <button
-              className="btn btn-primary"
-              onClick={loadMyLearning}
-              disabled={myCoursesLoading}
-            >
-              {myCoursesLoading ? 'Loading...' : 'Load my courses'}
-            </button>
+              <button
+                className="btn btn-primary"
+                onClick={loadMyLearning}
+                disabled={myCoursesLoading}
+              >
+                {myCoursesLoading ? 'Loading courses...' : 'Refresh courses'}
+              </button>
+            </div>
 
-            {myCourses.length === 0 && !myCoursesLoading ? (
-              <p>You haven't enrolled in any courses yet.</p>
+            {!myCoursesLoading && myCourses.length === 0 ? (
+              <div className="my-learning-empty">
+                <div className="my-learning-empty-icon">
+                  <BookOpen size={32} />
+                </div>
+                <h2>Your learning journey starts here</h2>
+                <p>
+                  You haven't enrolled in any courses yet. Explore the catalogue
+                  and find a course that matches your goals.
+                </p>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setPage('Explore')}
+                >
+                  Explore courses <ArrowRight size={16} />
+                </button>
+              </div>
             ) : (
-              <div className="course-grid">
-                {myCourses.map(course => (
-                  <article className="course-card" key={course._id}>
-                    <div className="course-card-body">
-                      <h3>{course.title}</h3>
-                      <p>{course.description}</p>
-                      <p>Instructor: {course.instructor?.name || 'Unknown'}</p>
-                      <p>Lessons: {course.lessons?.length || 0}</p>
-                    </div>
-                  </article>
-                ))}
+              <div className="my-learning-grid">
+                {myCourses.map((course) => {
+                  const lessons = course.lessons || [];
+                  const completedLessons = course.completedLessons || [];
+                  const totalLessons = lessons.length;
+                  const completedCount = completedLessons.length;
+                  const progress = totalLessons
+                    ? Math.min(
+                        100,
+                        Math.round((completedCount / totalLessons) * 100)
+                      )
+                    : 0;
+
+                  return (
+                    <article className="my-learning-card" key={course._id}>
+                      <div className="my-learning-card-top">
+                        <div className="my-learning-course-icon">
+                          <BookOpen size={23} />
+                        </div>
+                        <span className="my-learning-status">
+                          {progress === 100 ? 'Completed' : 'In progress'}
+                        </span>
+                      </div>
+
+                      <div className="my-learning-card-content">
+                        <h3>{course.title}</h3>
+                        <p className="my-learning-description">
+                          {course.description || 'Continue learning and building your skills.'}
+                        </p>
+
+                        <div className="my-learning-meta">
+                          <span>
+                            Instructor: {course.instructor?.name || 'Instructor not available'}
+                          </span>
+                          <span>
+                            {completedCount} of {totalLessons} lessons
+                          </span>
+                        </div>
+
+                        <div
+                          className="my-learning-progress-track"
+                          role="progressbar"
+                          aria-valuenow={progress}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={`${course.title} completion`}
+                        >
+                          <div
+                            className="my-learning-progress-fill"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+
+                        <div className="my-learning-progress-label">
+                          <span>Course progress</span>
+                          <strong>{progress}%</strong>
+                        </div>
+                      </div>
+
+                      <div className="my-learning-card-footer">
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => {
+                            setSelectedCourse(course);
+                            setPage('Course Details');
+                          }}
+                        >
+                          {progress === 100 ? 'Review course' : 'Continue learning'}
+                          <ArrowRight size={16} />
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             )}
           </section>
         )}
+
+        {page === 'Course Details' && selectedCourse && (
+          <section className="generic-page">
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                setSelectedCourse(null);
+                setSelectedQuiz(null);
+                setQuizResult(null);
+                setPage('My Learning');
+              }}
+            >
+              ← Back to My Learning
+            </button>
+
+            <h1>{selectedCourse.title}</h1>
+            <p>{selectedCourse.description}</p>
+
+            <p>
+              Instructor: {selectedCourse.instructor?.name || 'Not available'}
+            </p>
+
+            <div className="quiz-section">
+              <h2>Course Quizzes</h2>
+
+              <button
+                className="btn btn-secondary"
+                onClick={() => loadQuizzes(selectedCourse._id)}
+                disabled={quizzesLoading}
+              >
+                {quizzesLoading ? 'Loading quizzes...' : 'Load Quizzes'}
+              </button>
+
+              {quizzesLoading && <p>Loading available quizzes...</p>}
+
+              {!quizzesLoading && quizzes.length === 0 && (
+                <p>No quizzes found. Click "Load Quizzes" to check again.</p>
+              )}
+
+              {quizzes.map((quiz) => (
+                <article key={quiz._id} className="feature-panel">
+                  <div>
+                    <h3>{quiz.title}</h3>
+                    <p>{quiz.description || 'Test your knowledge of this course.'}</p>
+                    <p>{quiz.questions?.length || 0} questions</p>
+
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => {
+                        setSelectedQuiz(quiz);
+                        setQuizAnswers({});
+                        setQuizResult(null);
+                      }}
+                    >
+                      Take Quiz
+                    </button>
+                  </div>
+                </article>
+              ))}
+
+              {selectedQuiz && !quizResult && (
+                <div className="quiz-attempt">
+                  <div className="quiz-attempt-header">
+                    <div>
+                      <span className="quiz-eyebrow">ASSESSMENT</span>
+                      <h2>{selectedQuiz.title}</h2>
+                      <p>Choose the best answer for each question.</p>
+                    </div>
+
+                    <div className="quiz-question-count">
+                      <span>{Object.keys(quizAnswers).length}</span>
+                      <span> / {selectedQuiz.questions?.length || 0} answered</span>
+                    </div>
+                  </div>
+
+                  <div className="quiz-question-list">
+                    {selectedQuiz.questions?.map((question, questionIndex) => (
+                      <div
+                        key={question._id || questionIndex}
+                        className="quiz-question-card"
+                      >
+                        <div className="quiz-question-top">
+                          <span className="quiz-number">
+                            Question {String(questionIndex + 1).padStart(2, '0')}
+                          </span>
+
+                          <span className="quiz-points">
+                            {question.points || 1}{' '}
+                            {(question.points || 1) === 1 ? 'point' : 'points'}
+                          </span>
+                        </div>
+
+                        <h3 className="quiz-question-title">
+                          {question.prompt}
+                        </h3>
+
+                        <div className="quiz-options-list">
+                          {question.options?.map((option, optionIndex) => {
+                            const isSelected =
+                              quizAnswers[questionIndex] === optionIndex;
+
+                            return (
+                              <label
+                                key={optionIndex}
+                                className={`quiz-option-card ${
+                                  isSelected ? 'selected' : ''
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`question-${questionIndex}`}
+                                  value={optionIndex}
+                                  checked={isSelected}
+                                  onChange={() =>
+                                    setQuizAnswers((previous) => ({
+                                      ...previous,
+                                      [questionIndex]: optionIndex,
+                                    }))
+                                  }
+                                />
+
+                                <span className="quiz-option-letter">
+                                  {String.fromCharCode(65 + optionIndex)}
+                                </span>
+
+                                <span className="quiz-option-text">
+                                  {option}
+                                </span>
+
+                                <span className="quiz-option-indicator">
+                                  {isSelected ? '✓' : ''}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="quiz-submit-panel">
+                    <div>
+                      <strong>
+                        {Object.keys(quizAnswers).length ===
+                        (selectedQuiz.questions?.length || 0)
+                          ? 'All questions answered'
+                          : `${(selectedQuiz.questions?.length || 0) -
+                              Object.keys(quizAnswers).length} questions remaining`}
+                      </strong>
+
+                      <p>Review your answers before submitting.</p>
+                    </div>
+
+                    <button
+                      className="btn btn-primary quiz-submit-button"
+                      disabled={quizSubmitting}
+                      onClick={async () => {
+                        const questionCount = selectedQuiz.questions?.length || 0;
+
+                        if (Object.keys(quizAnswers).length !== questionCount) {
+                          flash('Please answer every question before submitting.');
+                          return;
+                        }
+
+                        setQuizSubmitting(true);
+
+                        try {
+                          const result = await request(
+                            `/quizzes/${selectedQuiz._id}/submit`,
+                            {
+                              method: 'POST',
+                              body: JSON.stringify({
+                                answers: Object.entries(quizAnswers).map(
+                                  ([questionIndex, optionIndex]) => ({
+                                    questionIndex: Number(questionIndex),
+                                    optionIndex,
+                                  })
+                                ),
+                              }),
+                            }
+                          );
+
+                          setQuizResult(result);
+                          flash('Quiz submitted successfully!');
+                        } catch (error) {
+                          flash(`Quiz submission failed: ${error.message}`);
+                        } finally {
+                          setQuizSubmitting(false);
+                        }
+                      }}
+                    >
+                      {quizSubmitting ? 'Submitting...' : 'Submit Assessment'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {selectedQuiz && quizResult && (
+                 <div className="quiz-result">
+                  <div className="quiz-result-card">
+                    <div className="quiz-result-icon">
+                      {quizResult.percentage >= 70 ? '✓' : '↻'}
+                    </div>
+
+                    <span className="quiz-result-eyebrow">
+                      ASSESSMENT COMPLETED
+                    </span>
+
+                    <h2>
+                      {quizResult.percentage === 100
+                        ? 'Perfect Score!'
+                        : quizResult.percentage >= 70
+                        ? 'Well Done!'
+                        : 'Keep Practising!'}
+                    </h2>
+
+                    <p className="quiz-result-description">
+                      {quizResult.percentage === 100
+                        ? 'Excellent work! You answered every question correctly.'
+                        : quizResult.percentage >= 70
+                        ? 'Great effort! Keep building your knowledge.'
+                        : 'Review the course lessons and try again to improve your score.'}
+                    </p>
+
+                    <div className="quiz-result-score">
+                      <div className="quiz-result-percentage">
+                        <strong>{quizResult.percentage}%</strong>
+                        <span>Overall score</span>
+                      </div>
+
+                      <div className="quiz-result-divider" />
+
+                      <div className="quiz-result-marks">
+                        <strong>
+                          {quizResult.score}/{quizResult.total}
+                        </strong>
+                        <span>Marks earned</span>
+                      </div>
+                    </div>
+
+                    <div className="quiz-result-progress">
+                      <div
+                        className="quiz-result-progress-fill"
+                        style={{
+                          width: `${Math.min(100, Math.max(0, quizResult.percentage))}%`,
+                        }}
+                      />
+                    </div>
+
+                    <p className="quiz-result-footer">
+                      Quiz: {selectedQuiz.title}
+                    </p>
+
+                    <div className="quiz-result-actions">
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => {
+                          setSelectedQuiz(null);
+                          setQuizAnswers({});
+                          setQuizResult(null);
+                        }}
+                      >
+                        Back to Quizzes
+                      </button>
+
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          setSelectedQuiz(null);
+                          setQuizAnswers({});
+                          setQuizResult(null);
+                          setQuizzes([]);
+                        }}
+                      >
+                        Close Results
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <h2>Lessons</h2>
+
+            {selectedCourse.lessons?.length > 0 ? (
+              <div>
+                {selectedCourse.lessons.map((lesson, index) => (
+                  <article key={lesson._id || index}>
+                    <h3>
+                      {index + 1}. {lesson.title || `Lesson ${index + 1}`}
+                    </h3>
+
+                    <p>{lesson.description || 'No description available.'}</p>
+
+                    {lesson.videoUrl && (
+                      <video controls width="100%">
+                        <source src={lesson.videoUrl} />
+                        Your browser does not support video playback.
+                      </video>
+                    )}
+                    <div className="lesson-actions">
+                      <button
+                        className="btn btn-primary"
+                        onClick={async () => {
+                          try {
+                            const result = await request(
+                              `/learning/${selectedCourse._id}/lessons/${lesson._id}/progress`,
+                              {
+                                method: 'POST',
+                                body: JSON.stringify({ completed: true }),
+                              }
+                            );
+
+                            setSelectedCourse((previous) => ({
+                              ...previous,
+                              completedLessons: result.completedLessons,
+                              progress: result.progress,
+                            }));
+
+                            flash('Lesson marked as completed!');
+                          } catch (error) {
+                            flash(`Unable to update lesson: ${error.message}`);
+                          }
+                        }}
+                      >
+                        {(selectedCourse.completedLessons || []).includes(String(lesson._id))
+                          ? 'Completed ✓'
+                          : 'Mark as completed'}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p>No lessons have been added to this course yet.</p>
+            )}
+          </section>
+        )}
+
+        {/* INSTRUCTOR QUIZ MANAGEMENT */}
+        {page === 'Quiz Management' && (
+          <section className="generic-page quiz-management-page">
+            <button
+              className="btn btn-secondary"
+              onClick={() => setPage('Dashboard')}
+            >
+              ← Back to Dashboard
+            </button>
+
+            <div className="quiz-management-header">
+              <span className="eyebrow">INSTRUCTOR WORKSPACE</span>
+
+              <h1>
+                Quiz Management<span className="period">.</span>
+              </h1>
+
+              <p>Create, organize, and manage assessments for your courses.</p>
+            </div>
+
+            <div className="quiz-management-form">
+              <div className="quiz-form-header">
+                <div>
+                  <span className="eyebrow">ASSESSMENT BUILDER</span>
+                  <h2>Create a new quiz</h2>
+                  <p>Set up your quiz and add questions for your students.</p>
+                </div>
+
+                <div className="quiz-form-icon" aria-hidden="true">
+                  <ClipboardList size={28} />
+                </div>
+              </div>
+
+              {/* QUIZ DETAILS */}
+              <div className="quiz-form-grid">
+                <label className="quiz-form-field">
+                  Select course
+                  <select
+                    className="quiz-input"
+                    value={quizCourseId}
+                    onChange={(e) => setQuizCourseId(e.target.value)}
+                  >
+                    <option value="">Select a course</option>
+
+                    {courses.map((course) => (
+                      <option key={course._id} value={course._id}>
+                        {course.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="quiz-form-field">
+                  Quiz title
+                  <input
+                    className="quiz-input"
+                    type="text"
+                    value={quizTitle}
+                    onChange={(e) => setQuizTitle(e.target.value)}
+                    placeholder="e.g. Java Fundamentals Quiz"
+                  />
+                </label>
+
+                <label className="quiz-form-field quiz-description-field">
+                  Description
+                  <textarea
+                    className="quiz-input quiz-textarea"
+                    value={quizDescription}
+                    onChange={(e) => setQuizDescription(e.target.value)}
+                    placeholder="Describe what students will be assessed on"
+                    rows={4}
+                  />
+                </label>
+              </div>
+
+
+              {/* QUESTIONS HEADER */}
+              <div className="quiz-builder-heading">
+                <div>
+                  <h3>Questions</h3>
+                  <p>
+                    Add multiple-choice questions and select the correct answer.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() =>
+                    setNewQuizQuestions((previous) => [
+                      ...previous,
+                      {
+                        prompt: '',
+                        options: ['', '', '', ''],
+                        correctOptionIndex: 0,
+                        points: 1,
+                      },
+                    ])
+                  }
+                >
+                  + Add question
+                </button>
+              </div>
+
+              {/* QUESTION EDITORS */}
+              <div className="quiz-builder-list">
+                {newQuizQuestions.map((question, questionIndex) => (
+                  <article
+                    className="quiz-builder-question"
+                    key={questionIndex}
+                  >
+                    <div className="quiz-builder-question-heading">
+                      <div className="quiz-question-number">
+                        <span>
+                          QUESTION {String(questionIndex + 1).padStart(2, '0')}
+                        </span>
+
+                        <h4>Question {questionIndex + 1}</h4>
+                      </div>
+
+                      <div className="quiz-question-heading-actions">
+                        <span className="quiz-points-badge">
+                          {question.points} {Number(question.points) === 1 ? 'point' : 'points'}
+                        </span>
+
+                        {newQuizQuestions.length > 1 && (
+                          <button
+                            type="button"
+                            className="btn btn-secondary quiz-remove-button"
+                            onClick={() =>
+                              setNewQuizQuestions((previous) =>
+                                previous.filter(
+                                  (_, index) => index !== questionIndex
+                                )
+                              )
+                            }
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* QUESTION TEXT */}
+                    <label className="quiz-form-field">
+                      Question text
+                      <textarea
+                        className="quiz-input quiz-textarea"
+                        value={question.prompt}
+                        onChange={(e) =>
+                          setNewQuizQuestions((previous) =>
+                            previous.map((item, index) =>
+                              index === questionIndex
+                                ? { ...item, prompt: e.target.value }
+                                : item
+                            )
+                          )
+                        }
+                        placeholder="Enter your question here..."
+                        rows={2}
+                      />
+                    </label>
+
+                    {/* ANSWER OPTIONS */}
+                    <div className="quiz-options-heading">
+                      <h5>Answer options</h5>
+                      <span>Enter four possible answers</span>
+                    </div>
+
+                    <div className="quiz-builder-options">
+                      {question.options.map((option, optionIndex) => (
+                        <label
+                          className="quiz-form-field quiz-option-field"
+                          key={optionIndex}
+                        >
+                          <span>
+                            Option {String.fromCharCode(65 + optionIndex)}
+                          </span>
+
+                          <div className="quiz-option-input-wrap">
+                            <span className="quiz-option-letter">
+                              {String.fromCharCode(65 + optionIndex)}
+                            </span>
+
+                            <input
+                              className="quiz-input"
+                              value={option}
+                              onChange={(e) =>
+                                setNewQuizQuestions((previous) =>
+                                  previous.map((item, index) =>
+                                    index === questionIndex
+                                      ? {
+                                          ...item,
+                                          options: item.options.map((value, i) =>
+                                            i === optionIndex
+                                              ? e.target.value
+                                              : value
+                                          ),
+                                        }
+                                      : item
+                                  )
+                                )
+                              }
+                              placeholder={`Enter option ${String.fromCharCode(
+                                65 + optionIndex
+                              )}`}
+                            />
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+
+                    {/* CORRECT ANSWER AND POINTS */}
+                    <div className="quiz-question-settings">
+                      <label className="quiz-form-field">
+                        Correct answer
+                        <select
+                          className="quiz-input"
+                          value={question.correctOptionIndex}
+                          onChange={(e) =>
+                            setNewQuizQuestions((previous) =>
+                              previous.map((item, index) =>
+                                index === questionIndex
+                                  ? {
+                                      ...item,
+                                      correctOptionIndex: Number(e.target.value),
+                                    }
+                                  : item
+                              )
+                            )
+                          }
+                        >
+                          {question.options.map((_, optionIndex) => (
+                            <option key={optionIndex} value={optionIndex}>
+                              Option {String.fromCharCode(65 + optionIndex)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="quiz-form-field">
+                        Points
+                        <input
+                          className="quiz-input"
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={question.points}
+                          onChange={(e) =>
+                            setNewQuizQuestions((previous) =>
+                              previous.map((item, index) =>
+                                index === questionIndex
+                                  ? {
+                                      ...item,
+                                      points:
+                                        e.target.value === ''
+                                          ? ''
+                                          : Number(e.target.value),
+                                    }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+                      </label>
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              {/* FORM FOOTER */}
+              <div className="quiz-builder-footer">
+                <div className="quiz-builder-summary">
+                  <span>
+                    {newQuizQuestions.length}{' '}
+                    {newQuizQuestions.length === 1 ? 'question' : 'questions'}
+                  </span>
+
+                  <span>
+                    {newQuizQuestions.reduce(
+                      (total, question) =>
+                        total + (Number(question.points) > 0 ? Number(question.points) : 0),
+                      0
+                    )}{' '}
+                    total points
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-primary quiz-save-button"
+                  disabled={quizSaving}
+                  onClick={async () => {
+                    if (!quizCourseId || !quizTitle.trim()) {
+                      flash('Please select a course and enter a quiz title.');
+                      return;
+                    }
+
+                    if (newQuizQuestions.length === 0) {
+                      flash('Please add at least one question.');
+                      return;
+                    }
+
+                    const invalidQuestion = newQuizQuestions.some(
+                      (question) =>
+                        !question.prompt.trim() ||
+                        question.options.length !== 4 ||
+                        question.options.some(
+                          (option) =>
+                            typeof option !== 'string' || !option.trim()
+                        ) ||
+                        !Number.isInteger(Number(question.points)) ||
+                        Number(question.points) < 1
+                    );
+
+                    if (invalidQuestion) {
+                      flash(
+                        'Complete every question and all four options. Points must be a positive whole number.'
+                      );
+                      return;
+                    }
+
+                    setQuizSaving(true);
+
+                    try {
+                      await request('/quizzes', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          courseId: quizCourseId,
+                          title: quizTitle.trim(),
+                          description: quizDescription.trim(),
+                          questions: newQuizQuestions.map((question) => ({
+                            prompt: question.prompt.trim(),
+                            options: question.options.map((option) => option.trim()),
+                            correctOptionIndex: Number(question.correctOptionIndex),
+                            points: Number(question.points),
+                          })),
+                        }),
+                      });
+
+                      flash('Quiz created successfully!');
+
+                      setQuizTitle('');
+                      setQuizDescription('');
+                      setQuizCourseId('');
+
+                      setNewQuizQuestions([
+                        {
+                          prompt: '',
+                          options: ['', '', '', ''],
+                          correctOptionIndex: 0,
+                          points: 1,
+                        },
+                      ]);
+                    } catch (error) {
+                      flash(`Unable to create quiz: ${error.message}`);
+                    } finally {
+                      setQuizSaving(false);
+                    }
+                  }}
+                >
+                  {quizSaving ? (
+                    'Saving quiz...'
+                  ) : (
+                    <>
+                      <CheckCircle2 size={18} />
+                      Save Quiz
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
 
         {/* LIVE CLASSES */}
 
@@ -1103,68 +2028,141 @@ export default function App() {
             <span className="eyebrow">LEARN TOGETHER</span>
 
             <h1>
-              Live classes<span className="period">.</span>
+              Live Classes<span className="period">.</span>
             </h1>
 
-            <div className="feature-panel">
-              <div className="feature-icon">
-                <Video size={25} />
-              </div>
+            {!liveToken ? (
+              <>
+                <p>Join your instructor and classmates for live video and audio sessions.</p>
 
-              <div>
-                <h3>Learn in real time</h3>
+                <div className="feature-panel">
+                  <div className="feature-icon">
+                    <Video size={25} />
+                  </div>
 
-                <p>
-                  Live classrooms require WebRTC signaling and
-                  STUN/TURN configuration or a service such as LiveKit.
-                  The backend also needs to support the live-class
-                  features you want to offer.
-                </p>
+                  <div>
+                    <h3>Join a Live Class</h3>
+                    <p>Enter the meeting code provided by your instructor.</p>
+
+                    <input
+                      type="text"
+                      placeholder="Enter meeting code"
+                      value={liveRoomName}
+                      onChange={(e) => setLiveRoomName(e.target.value)}
+                      disabled={liveConnecting}
+                    />
+
+                    <button
+                      className="btn btn-primary"
+                      onClick={joinLiveClass}
+                      disabled={liveConnecting}
+                    >
+                      {liveConnecting ? 'Connecting...' : 'Join Class'}
+                      <ArrowRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="live-classroom">
+                <h2>Room: {liveRoomName}</h2>
+
+                <LiveKitRoom
+                  token={liveToken}
+                  serverUrl={liveServerUrl}
+                  connect={true}
+                  audio={true}
+                  video={true}
+                  onDisconnected={() => {
+                    setLiveToken('');
+                    setLiveServerUrl('');
+                  }}
+                  style={{ height: '75vh' }}
+                >
+                  <VideoConference chatMessageFormatter={undefined} />
+                  <RoomAudioRenderer />
+                </LiveKitRoom>
 
                 <button
                   className="btn btn-primary"
-                  onClick={() =>
-                    flash(
-                      'Live video requires WebRTC signaling and STUN/TURN or LiveKit configuration.'
-                    )
-                  }
+                  onClick={() => {
+                    setLiveToken('');
+                    setLiveServerUrl('');
+                  }}
                 >
-                  Open live room <ArrowRight size={16} />
+                  Leave Class
                 </button>
               </div>
-            </div>
+            )}
           </section>
         )}
-
+        
         {/* CERTIFICATES */}
-
         {page === 'Certificates' && (
           <section className="generic-page">
             <span className="eyebrow">YOUR ACHIEVEMENTS</span>
-
             <h1>
               Certificates<span className="period">.</span>
             </h1>
+            <p>Download certificates for courses you have successfully completed.</p>
 
-            <p>
-              Complete your courses to earn certificates. Certificate
-              generation must be connected to your backend.
-            </p>
-
-            <div className="feature-panel">
-              <div className="feature-icon">
-                <Award size={25} />
+            {!user ? (
+              <p>Please sign in to view your certificates.</p>
+            ) : myCourses.filter((course) => course.progress === 100).length === 0 ? (
+              <div className="feature-panel">
+                <div className="feature-icon">
+                  <Award size={25} />
+                </div>
+                <div>
+                  <h3>No certificates yet</h3>
+                  <p>Complete all lessons in a course to earn your certificate.</p>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => setPage('My Learning')}
+                  >
+                    View My Learning
+                  </button>
+                </div>
               </div>
+            ) : (
+              <div className="certificate-grid">
+                {myCourses
+                  .filter((course) => course.progress === 100)
+                  .map((course) => (
+                    <article className="certificate-card" key={course._id}>
+                      <div className="certificate-card-top">
+                        <div className="certificate-card-icon">
+                          <Award size={26} />
+                        </div>
+                        <span className="certificate-badge">Completed</span>
+                      </div>
 
-              <div>
-                <h3>Every milestone matters</h3>
+                      <div className="certificate-card-body">
+                        <h3>{course.title}</h3>
 
-                <p>
-                  Certificates should be issued only after the backend
-                  confirms course completion.
-                </p>
+                        <div className="certificate-meta">
+                          <div>
+                            <small>Instructor</small>
+                            <span>{course.instructor?.name || 'Not available'}</span>
+                          </div>
+                          <div>
+                            <small>Lessons completed</small>
+                            <span>{course.totalLessons}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        className="btn btn-primary certificate-download-btn"
+                        onClick={() => downloadCertificate(course)}
+                      >
+                        <Award size={18} />
+                        Download Certificate
+                      </button>
+                    </article>
+                  ))}
               </div>
-            </div>
+            )}
           </section>
         )}
 
@@ -1186,33 +2184,38 @@ export default function App() {
 
             {user?.role === 'instructor' ||
             user?.role === 'admin' ? (
-              <button
-                className="btn btn-primary"
-                onClick={async () => {
-                  try {
-                    const data = await request('/instructor/metrics');
+              <div className="instructor-dashboard-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={async () => {
+                    try {
+                      const data = await request('/instructor/metrics');
 
-                    flash(
-                      `${data.courseCount} courses · ${data.enrollmentCount} enrollments`
-                    );
-                  } catch (error) {
-                    flash(
-                      `Unable to load metrics: ${error.message}`
-                    );
-                  }
-                }}
-              >
-                Load instructor metrics
-              </button>
+                      flash(
+                        `${data.courseCount} courses · ${data.enrollmentCount} enrollments`
+                      );
+                    } catch (error) {
+                      flash(`Unable to load metrics: ${error.message}`);
+                    }
+                  }}
+                >
+                  Load instructor metrics
+                </button>
+
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setPage('Quiz Management')}
+                >
+                  Manage Quizzes
+                  <ArrowRight size={16} />
+                </button>
+              </div>
             ) : (
               <button
                 className="btn btn-primary"
-                onClick={() =>
-                  setPage(user ? 'My Learning' : 'Sign in')
-                }
+                onClick={() => setPage(user ? 'My Learning' : 'Sign in')}
               >
                 {user ? 'View my learning' : 'Sign in'}
-
                 <ArrowRight size={16} />
               </button>
             )}

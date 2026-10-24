@@ -1,0 +1,125 @@
+/* ===== Certificates page ===== */
+
+.generic-page:has(.certificate-grid) {
+    max-width: 1200px;
+}
+
+.generic-page .certificate-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 380px));
+    gap: 24px;
+    margin-top: 28px;
+    align-items: stretch;
+}
+
+.generic-page .certificate-card {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 24px;
+    min-width: 0;
+    background: #fff;
+    border: 1px solid #dfe5ef;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgb(28 43 76 / 4%);
+    transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+}
+
+/* Lift slightly on hover */
+.generic-page .certificate-card:hover {
+    transform: translateY(-4px);
+    border-color: #c9d1f5;
+    box-shadow: 0 14px 30px rgb(28 43 76 / 10%);
+}
+
+.generic-page .certificate-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.generic-page .certificate-card-icon {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    color: #5358e8;
+    background: #eff0ff;
+    border-radius: 14px;
+}
+
+.generic-page .certificate-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: #edf9f2;
+    color: #21865b;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.generic-page .certificate-card-body {
+    flex: 1;
+}
+
+.generic-page .certificate-card-body h3 {
+    margin: 0 0 18px;
+    font: 700 19px/1.4 Manrope, sans-serif;
+    letter-spacing: -.3px;
+    color: #202b45;
+    overflow-wrap: anywhere;
+}
+
+/* Label on the left, value on the right, with a gap and dividers */
+.generic-page .certificate-meta {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid #e6eaf2;
+}
+
+.generic-page .certificate-meta > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid #eef1f6;
+}
+
+.generic-page .certificate-meta > div:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.generic-page .certificate-meta small {
+    font-size: 13px;
+    color: #8b95a7;
+}
+
+.generic-page .certificate-meta span {
+    font-size: 14px;
+    font-weight: 600;
+    color: #30394b;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.generic-page .certificate-card .certificate-download-btn {
+    width: 100%;
+    min-height: 46px;
+    margin: 0;
+    margin-top: auto;
+    font-size: 14px;
+}
+
+@media (max-width: 600px) {
+    .generic-page .certificate-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .generic-page .certificate-card {
+        padding: 20px;
+    }
+}
