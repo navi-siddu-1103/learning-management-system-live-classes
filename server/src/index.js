@@ -16,6 +16,10 @@ import certificateRoutes from './routes/certificates.js';
 import path from 'node:path';
 import liveClassRoutes from './routes/liveClasses.js';
 import learningRoutes from './routes/learning.js';
+import adminRoutes from './routes/admin.js';
+import notificationRoutes from './routes/notifications.js';
+import paymentRoutes from './routes/payments.js';
+import videoRoutes from './routes/videos.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -35,6 +39,10 @@ app.use('/api/uploads', uploadRoutes);
 app.use('/api/certificates', certificateRoutes);
 app.use('/api/live-classes', liveClassRoutes);
 app.use('/api/learning', learningRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/videos', videoRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
