@@ -7,9 +7,10 @@ const serverRoot = path.resolve(
 );
 
 function resolveStoragePath(configuredPath, fallback) {
-  return path.isAbsolute(configuredPath)
-    ? configuredPath
-    : path.resolve(serverRoot, configuredPath || fallback);
+  const storagePath = configuredPath || fallback;
+  return path.isAbsolute(storagePath)
+    ? storagePath
+    : path.resolve(serverRoot, storagePath);
 }
 
 export const uploadDir = resolveStoragePath(
