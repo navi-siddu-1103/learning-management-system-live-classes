@@ -3,9 +3,9 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { requireAuth } from '../middleware/auth.js';
 import { Course, Enrollment } from '../models.js';
+import { processedDir } from '../videoStorage.js';
 
 const router = Router();
-const processedDir = path.resolve('processed');
 
 // Check whether the user can access a course containing this video.
 async function canAccessVideo(req, jobId) {

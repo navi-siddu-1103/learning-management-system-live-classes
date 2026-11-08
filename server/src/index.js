@@ -13,13 +13,13 @@ import quizRoutes from './routes/quizzes.js';
 import instructorRoutes from './routes/instructor.js';
 import uploadRoutes from './routes/uploads.js';
 import certificateRoutes from './routes/certificates.js';
-import path from 'node:path';
 import liveClassRoutes from './routes/liveClasses.js';
 import learningRoutes from './routes/learning.js';
 import adminRoutes from './routes/admin.js';
 import notificationRoutes from './routes/notifications.js';
 import paymentRoutes from './routes/payments.js';
 import videoRoutes from './routes/videos.js';
+import { processedDir } from './videoStorage.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -27,7 +27,7 @@ const io = new Server(server, { cors: { origin: process.env.CLIENT_ORIGIN || 'ht
 app.set('io', io);
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }));
 app.use(express.json({ limit: '1mb' }));
-app.use('/processed', express.static(path.resolve('processed')));
+app.use('/processed', express.static(processedDir));
 app.use('/api', rateLimit({ windowMs: 60_000, limit: 120 }));
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'learnlive-api' }));
 app.use('/api/auth', authRoutes);

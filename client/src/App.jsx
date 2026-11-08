@@ -550,7 +550,7 @@ export default function App() {
     const formData = new FormData();
     formData.append('video', file);
 
-    const response = await fetch('/api/uploads/video', {
+    const response = await fetch(`${API}/uploads/video`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -572,7 +572,7 @@ export default function App() {
       await new Promise(resolve => setTimeout(resolve, 3000));
 
       const statusResponse = await fetch(
-        `/api/uploads/video/${encodeURIComponent(jobId)}/status`,
+        `${API}/uploads/video/${encodeURIComponent(jobId)}/status`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

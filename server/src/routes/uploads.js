@@ -6,13 +6,9 @@ import { Queue } from 'bullmq';
 
 import { Course, Enrollment } from '../models.js';
 import { requireAuth, allowRoles } from '../middleware/auth.js';
+import { uploadDir, processedDir, playlistPath } from '../videoStorage.js';
 
 const router = Router();
-
-const uploadDir = path.resolve(process.env.UPLOAD_DIR || 'uploads');
-const processedDir = path.resolve(
-  process.env.PROCESSED_DIR || 'processed'
-);
 
 fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -183,9 +179,7 @@ router.get(
         state,
         ready:
           state === 'completed' &&
-          fs.existsSync(
-            path.join(processedDir, String(job.id), 'index.m3u8')
-          ),
+          fs.existsSync(playlistPath(job.id)),
         failedReason: state === 'failed' ? job.failedReason : undefined,
       });
     } catch (error) {
@@ -224,19 +218,15 @@ router.get(
         });
       }
 
-      const playlistPath = path.join(
-        processedDir,
-        jobId,
-        'index.m3u8'
-      );
+      const playlistFile = playlistPath(jobId);
 
-      if (!fs.existsSync(playlistPath)) {
+      if (!fs.existsSync(playlistFile)) {
         return res.status(404).json({
           message: 'Processed video playlist not found.',
         });
       }
 
-      const playlist = fs.readFileSync(playlistPath, 'utf8');
+      const playlist = fs.readFileSync(playlistFile, 'utf8');
 
       // Replace segment filenames with protected API endpoints.
       const protectedPlaylist = playlist.replace(

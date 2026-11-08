@@ -9,6 +9,8 @@ import {
 import { requireAuth, allowRoles } from '../middleware/auth.js';
 import mongoose from 'mongoose';
 import { Queue } from 'bullmq';
+import fs from 'node:fs';
+import { playlistPath } from '../videoStorage.js';
 
 const router = Router();
 const videoQueue = new Queue('video-processing', {
@@ -239,9 +241,9 @@ router.post(
           });
         }
         const state = await job.getState();
-        if (state !== 'completed') {
+        if (state !== 'completed' || !fs.existsSync(playlistPath(job.id))) {
           return res.status(409).json({
-            message: 'Video processing has not completed yet',
+            message: 'Video processing has not completed yet or its playlist is unavailable',
             status: state,
           });
         }

@@ -3,9 +3,10 @@ import { Worker } from 'bullmq';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { processedDir } from '../videoStorage.js';
 
 const worker = new Worker('video-processing', async job => {
-  const outputDir = path.resolve('processed', String(job.id));
+  const outputDir = path.join(processedDir, String(job.id));
   await fs.mkdir(outputDir, { recursive: true });
   const playlist = path.join(outputDir, 'index.m3u8');
   const ffmpegPath = 'ffmpeg';
