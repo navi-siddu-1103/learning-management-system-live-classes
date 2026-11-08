@@ -573,38 +573,7 @@ export default function App() {
     if (!jobId) {
       throw new Error('The server did not return a video-processing job ID.');
     }
-    // Wait for the worker to finish converting the video.
-    const maxAttempts = 120;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      const statusResponse = await fetch(
-        `${API}/uploads/video/${encodeURIComponent(jobId)}/status`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const statusResult = await statusResponse.json();
-
-      if (!statusResponse.ok) {
-        throw new Error(
-          statusResult.message || 'Unable to check video-processing status.'
-        );
-      }
-      if (statusResult.ready) {
-        return { jobId, status: 'completed' };
-      }
-      if (statusResult.state === 'failed') {
-        throw new Error(
-          statusResult.failedReason || 'Video processing failed.'
-        );
-      }
-    }
-    throw new Error(
-      'Video processing is taking longer than expected. Please check again later.'
-    );
+    return { jobId, status: 'queued' };
   }
 
   // ENROLL IN COURSE
@@ -2828,7 +2797,7 @@ export default function App() {
                                 const uploadResult = await uploadLessonVideo(lessonVideo);
                                 videoJobId = uploadResult.jobId;
 
-                                flash('Video processing completed. Saving lesson...');
+                                flash('Video uploaded. Saving lesson while the video processes...');
                               }
 
                               const result = await request(

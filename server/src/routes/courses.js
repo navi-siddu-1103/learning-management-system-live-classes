@@ -239,9 +239,15 @@ router.post(
           });
         }
         const state = await job.getState();
-        if (state !== 'completed' || !fs.existsSync(playlistPath(job.id))) {
+        if (state === 'failed') {
           return res.status(409).json({
-            message: 'Video processing has not completed yet or its playlist is unavailable',
+            message: 'Video processing failed',
+            status: state,
+          });
+        }
+        if (state === 'completed' && !fs.existsSync(playlistPath(job.id))) {
+          return res.status(409).json({
+            message: 'Processed video playlist is unavailable',
             status: state,
           });
         }
@@ -309,12 +315,15 @@ router.patch(
         ) {
           return res.status(403).json({ message: 'You cannot use this uploaded video' });
         }
-        if (
-          (await job.getState()) !== 'completed' ||
-          !fs.existsSync(playlistPath(job.id))
-        ) {
+        const state = await job.getState();
+        if (state === 'failed') {
           return res.status(409).json({
-            message: 'Video processing has not completed yet or its playlist is unavailable',
+            message: 'Video processing failed',
+          });
+        }
+        if (state === 'completed' && !fs.existsSync(playlistPath(job.id))) {
+          return res.status(409).json({
+            message: 'Processed video playlist is unavailable',
           });
         }
       }
