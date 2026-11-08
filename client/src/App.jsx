@@ -242,6 +242,7 @@ export default function App() {
 
   const [lessonVideo, setLessonVideo] = useState(null);
   const [lessonSaving, setLessonSaving] = useState(false);
+  const [newLessonSaving, setNewLessonSaving] = useState(false);
   const [editingLessonId, setEditingLessonId] = useState('');
   const [editingLessonForm, setEditingLessonForm] = useState({
     title: '',
@@ -2817,7 +2818,7 @@ export default function App() {
                               return;
                             }
 
-                            setLessonSaving(true);
+                            setNewLessonSaving(true);
 
                             try {
                               let videoJobId = '';
@@ -2862,7 +2863,7 @@ export default function App() {
                             } catch (error) {
                               flash(`Unable to save lesson: ${error.message}`);
                             } finally {
-                              setLessonSaving(false);
+                              setNewLessonSaving(false);
                             }
                           }}
                         >
@@ -2920,9 +2921,9 @@ export default function App() {
                           <button
                             className="btn btn-primary"
                             type="submit"
-                            disabled={lessonSaving}
+                            disabled={newLessonSaving}
                           >
-                            {lessonSaving ? 'Saving lesson...' : 'Add Lesson'}
+                            {newLessonSaving ? 'Saving lesson...' : 'Add Lesson'}
                           </button>
                         </form>
                   </div>
