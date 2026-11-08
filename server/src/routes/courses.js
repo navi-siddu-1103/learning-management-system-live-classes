@@ -11,13 +11,11 @@ import mongoose from 'mongoose';
 import { Queue } from 'bullmq';
 import fs from 'node:fs';
 import { playlistPath } from '../videoStorage.js';
+import { redisConnection } from '../redis.js';
 
 const router = Router();
 const videoQueue = new Queue('video-processing', {
-  connection: {
-    host: process.env.REDIS_HOST || '127.0.0.1',
-    port: Number(process.env.REDIS_PORT || 6379),
-  },
+  connection: redisConnection(),
 });
 
 router.get('/', async (_req, res) => {
