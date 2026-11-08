@@ -230,6 +230,23 @@ router.get(
       const playlistFile = playlistPath(jobId);
 
       if (!fs.existsSync(playlistFile)) {
+        const job = await videoQueue.getJob(jobId);
+        const state = job ? await job.getState() : null;
+
+        if (state && !['completed', 'failed'].includes(state)) {
+          res.setHeader('Retry-After', '2');
+          return res.status(425).json({
+            message: 'Video is still being processed.',
+            state,
+          });
+        }
+
+        if (state === 'failed') {
+          return res.status(409).json({
+            message: 'Video processing failed.',
+          });
+        }
+
         return res.status(404).json({
           message: 'Processed video playlist not found.',
         });
