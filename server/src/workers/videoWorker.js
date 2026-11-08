@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { processedDir } from '../videoStorage.js';
+import { redisConnection } from '../redis.js';
 
 const worker = new Worker('video-processing', async job => {
   const outputDir = path.join(processedDir, String(job.id));
@@ -19,6 +20,6 @@ const worker = new Worker('video-processing', async job => {
   // Production step: upload playlist + segments to a private S3 bucket and store the CloudFront URL.
   console.log(`HLS generated at ${playlist}. Configure S3/CloudFront upload before production.`);
   return { outputDir, playlist };
-}, { connection: { host: process.env.REDIS_HOST || '127.0.0.1', port: Number(process.env.REDIS_PORT || 6379) }, concurrency: 2 });
+}, { connection: redisConnection({ worker: true }), concurrency: 2 });
 worker.on('completed', job => console.log(`Video job ${job.id} completed`));
 worker.on('failed', (job, err) => console.error(`Video job ${job?.id} failed:`, err.message));

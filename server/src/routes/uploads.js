@@ -7,6 +7,7 @@ import { Queue } from 'bullmq';
 import { Course, Enrollment } from '../models.js';
 import { requireAuth, allowRoles } from '../middleware/auth.js';
 import { uploadDir, processedDir, playlistPath } from '../videoStorage.js';
+import { redisConnection } from '../redis.js';
 
 const router = Router();
 
@@ -52,10 +53,7 @@ const upload = multer({
 });
 
 const videoQueue = new Queue('video-processing', {
-  connection: {
-    host: process.env.REDIS_HOST || '127.0.0.1',
-    port: Number(process.env.REDIS_PORT || 6379),
-  },
+  connection: redisConnection(),
 });
 
 /**
@@ -111,23 +109,31 @@ router.post(
         });
       }
 
-      const job = await videoQueue.add(
-        'convert-to-hls',
-        {
-          inputPath: path.resolve(req.file.path),
-          originalName: req.file.originalname,
-          uploadedBy: String(req.user.id),
-        },
-        {
-          attempts: 2,
-          backoff: {
-            type: 'exponential',
-            delay: 3000,
+      const job = await Promise.race([
+        videoQueue.add(
+          'convert-to-hls',
+          {
+            inputPath: path.resolve(req.file.path),
+            originalName: req.file.originalname,
+            uploadedBy: String(req.user.id),
           },
-          removeOnComplete: 100,
-          removeOnFail: 100,
-        }
-      );
+          {
+            attempts: 2,
+            backoff: {
+              type: 'exponential',
+              delay: 3000,
+            },
+            removeOnComplete: 100,
+            removeOnFail: 100,
+          }
+        ),
+        new Promise((_, reject) => {
+          setTimeout(
+            () => reject(new Error('Video-processing queue is unavailable.')),
+            15_000
+          );
+        }),
+      ]);
 
       return res.status(202).json({
         jobId: String(job.id),
@@ -137,8 +143,11 @@ router.post(
     } catch (error) {
       console.error('Video upload error:', error);
 
-      return res.status(500).json({
-        message: 'Unable to upload video.',
+      return res.status(503).json({
+        message:
+          error.message === 'Video-processing queue is unavailable.'
+            ? error.message
+            : 'Unable to upload video.',
       });
     }
   }
