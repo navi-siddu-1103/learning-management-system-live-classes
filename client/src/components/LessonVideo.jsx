@@ -26,6 +26,7 @@ export default function LessonVideo({ videoJobId }) {
     const playlistUrl = `${API}/uploads/video/${encodeURIComponent(videoJobId)}/playlist`;
     let hls = null;
     let cancelled = false;
+    let retryTimer = null;
 
     setPlaybackError('');
 
@@ -37,6 +38,12 @@ export default function LessonVideo({ videoJobId }) {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (cancelled) return;
+
+        if (res.status === 425) {
+          setPlaybackError('Video is still processing. Please wait...');
+          retryTimer = setTimeout(start, 2000);
+          return;
+        }
 
         if (!res.ok) {
           setPlaybackError(`Playlist request failed (HTTP ${res.status}).`);
@@ -99,6 +106,7 @@ export default function LessonVideo({ videoJobId }) {
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
       if (hls) hls.destroy();
       video.pause();
       video.removeAttribute('src');
