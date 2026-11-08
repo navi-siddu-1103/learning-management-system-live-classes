@@ -274,6 +274,110 @@ router.post(
   }
 );
 
+router.patch(
+  '/:id/lessons/:lessonId',
+  requireAuth,
+  allowRoles('instructor', 'admin'),
+  async (req, res) => {
+    try {
+      const { id, lessonId } = req.params;
+      if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(lessonId)) {
+        return res.status(400).json({ message: 'Invalid course or lesson ID' });
+      }
+
+      const course = await Course.findById(id);
+      if (!course) return res.status(404).json({ message: 'Course not found' });
+      if (
+        req.user.role !== 'admin' &&
+        String(course.instructor) !== String(req.user.id)
+      ) {
+        return res.status(403).json({ message: 'You do not own this course' });
+      }
+
+      const lesson = course.lessons.id(lessonId);
+      if (!lesson) return res.status(404).json({ message: 'Lesson not found' });
+
+      const { title, description, durationSeconds, videoJobId } = req.body;
+      if (title !== undefined && !String(title).trim()) {
+        return res.status(400).json({ message: 'Lesson title is required' });
+      }
+
+      if (videoJobId !== undefined && videoJobId !== '') {
+        const job = await videoQueue.getJob(String(videoJobId));
+        if (!job) return res.status(404).json({ message: 'Video-processing job not found' });
+        if (
+          req.user.role !== 'admin' &&
+          String(job.data.uploadedBy) !== String(req.user.id)
+        ) {
+          return res.status(403).json({ message: 'You cannot use this uploaded video' });
+        }
+        if (
+          (await job.getState()) !== 'completed' ||
+          !fs.existsSync(playlistPath(job.id))
+        ) {
+          return res.status(409).json({
+            message: 'Video processing has not completed yet or its playlist is unavailable',
+          });
+        }
+      }
+
+      if (title !== undefined) lesson.title = String(title).trim();
+      if (description !== undefined) lesson.description = String(description);
+      if (durationSeconds !== undefined) {
+        lesson.durationSeconds = Number(durationSeconds) || 0;
+      }
+      if (videoJobId !== undefined) {
+        lesson.videoJobId = String(videoJobId);
+        lesson.videoUrl = videoJobId
+          ? `/api/uploads/video/${videoJobId}/playlist`
+          : '';
+      }
+
+      await course.save();
+      return res.json({ message: 'Lesson updated successfully', lesson });
+    } catch (error) {
+      console.error('Update lesson failed:', error);
+      return res.status(500).json({ message: 'Unable to update lesson' });
+    }
+  }
+);
+
+router.delete(
+  '/:id/lessons/:lessonId',
+  requireAuth,
+  allowRoles('instructor', 'admin'),
+  async (req, res) => {
+    try {
+      const { id, lessonId } = req.params;
+      if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(lessonId)) {
+        return res.status(400).json({ message: 'Invalid course or lesson ID' });
+      }
+
+      const course = await Course.findById(id);
+      if (!course) return res.status(404).json({ message: 'Course not found' });
+      if (
+        req.user.role !== 'admin' &&
+        String(course.instructor) !== String(req.user.id)
+      ) {
+        return res.status(403).json({ message: 'You do not own this course' });
+      }
+      if (!course.lessons.id(lessonId)) {
+        return res.status(404).json({ message: 'Lesson not found' });
+      }
+
+      course.lessons.pull(lessonId);
+      course.lessons.forEach((lesson, index) => {
+        lesson.order = index + 1;
+      });
+      await course.save();
+      return res.json({ message: 'Lesson deleted successfully', lessons: course.lessons });
+    } catch (error) {
+      console.error('Delete lesson failed:', error);
+      return res.status(500).json({ message: 'Unable to delete lesson' });
+    }
+  }
+);
+
 router.post(
   '/:id/enroll',
   requireAuth,
@@ -331,16 +435,17 @@ router.patch('/:id', requireAuth, allowRoles('instructor', 'admin'), async (req,
   }
   if (
     req.user.role !== 'admin' &&
-    String(course.instructor) !== req.user.id
+    String(course.instructor) !== String(req.user.id)
   ) {
     return res.status(403).json({ message: 'You do not own this course' });
   }
   const {
     title,
     description,
-    videoUrl,
-    videoJobId,
-    durationSeconds,
+    category,
+    price,
+    published,
+    lessons,
   } = req.body;
   if (title !== undefined) course.title = title;
   if (description !== undefined) course.description = description;

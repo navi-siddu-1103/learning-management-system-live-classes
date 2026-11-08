@@ -327,6 +327,37 @@ button {
     font-size: 14px;
     line-height: 1.9;
     color: #798397;
+}
+
+.lesson-editor {
+    border: 1px solid #e8ebf3;
+    border-radius: 12px;
+    padding: 16px;
+    margin: 16px 0;
+}
+
+.lesson-editor-summary,
+.lesson-editor-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.lesson-editor-summary {
+    justify-content: space-between;
+}
+
+.lesson-editor-summary p {
+    margin: 7px 0;
+    color: #798397;
+}
+
+.lesson-editor-summary small {
+    color: #798397;
+}
+
+.lesson-editor-actions {
+    flex-wrap: wrap;
     max-width: 440px;
     margin-bottom: 25px;
 }
@@ -390,6 +421,12 @@ button {
     background: white;
     border-color: #e4e8f0;
     color: #485366;
+}
+
+.btn-danger {
+    background: #fff4f3;
+    border-color: #f3c7c3;
+    color: #b33a32;
 }
 
 .btn-sm {

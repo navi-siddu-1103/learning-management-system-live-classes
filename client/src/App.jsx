@@ -242,6 +242,12 @@ export default function App() {
 
   const [lessonVideo, setLessonVideo] = useState(null);
   const [lessonSaving, setLessonSaving] = useState(false);
+  const [editingLessonId, setEditingLessonId] = useState('');
+  const [editingLessonForm, setEditingLessonForm] = useState({
+    title: '',
+    description: '',
+  });
+  const [editingLessonVideo, setEditingLessonVideo] = useState(null);
 
 
   const [newQuizQuestions, setNewQuizQuestions] = useState([
@@ -655,6 +661,32 @@ export default function App() {
     }
   }
 
+  async function openCourse(course) {
+    if (!user) {
+      setPage('Welcome');
+      flash('Please sign in to continue.');
+      return;
+    }
+
+    const courseId = String(course._id || course.id || '');
+    if (!courseId || courseId.startsWith('demo')) {
+      flash('Please select a course published in the database.');
+      return;
+    }
+
+    try {
+      const data = await request(`/courses/${courseId}`);
+      const openedCourse = data.course || data;
+      const lessonData = await request(`/courses/${courseId}/lessons`);
+      openedCourse.lessons = lessonData.lessons || [];
+      setSelectedCourse(openedCourse);
+      setPage('Course Details');
+    } catch (error) {
+      console.error('Unable to open course:', error);
+      flash(`Unable to open course: ${error.message}`);
+    }
+  }
+
   // BUY PAID COURSE WITH RAZORPAY
   async function buyCourse(course) {
     if (!user) {
@@ -813,6 +845,104 @@ export default function App() {
       flash(`Unable to load courses: ${error.message}`);
     } finally {
       setLessonsCourseLoading(false);
+    }
+  }
+
+  function startLessonEdit(lesson) {
+    setEditingLessonId(String(lesson._id));
+    setEditingLessonForm({
+      title: lesson.title || '',
+      description: lesson.description || '',
+    });
+    setEditingLessonVideo(null);
+  }
+
+  async function saveLessonEdit(lesson) {
+    setLessonSaving(true);
+    try {
+      let videoJobId = lesson.videoJobId || '';
+      if (editingLessonVideo) {
+        const uploadResult = await uploadLessonVideo(editingLessonVideo);
+        videoJobId = uploadResult.jobId;
+      }
+
+      const result = await request(
+        `/courses/${selectedCourse._id}/lessons/${lesson._id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            title: editingLessonForm.title.trim(),
+            description: editingLessonForm.description.trim(),
+            videoJobId,
+          }),
+        }
+      );
+
+      setSelectedCourse((previous) => ({
+        ...previous,
+        lessons: previous.lessons.map((item) =>
+          String(item._id) === String(lesson._id)
+            ? result.lesson
+            : item
+        ),
+      }));
+      setEditingLessonId('');
+      setEditingLessonVideo(null);
+      flash('Lesson updated successfully.');
+    } catch (error) {
+      flash(`Unable to update lesson: ${error.message}`);
+    } finally {
+      setLessonSaving(false);
+    }
+  }
+
+  async function removeLesson(lesson) {
+    if (!window.confirm(`Remove "${lesson.title}" from this course?`)) return;
+
+    setLessonSaving(true);
+    try {
+      const result = await request(
+        `/courses/${selectedCourse._id}/lessons/${lesson._id}`,
+        { method: 'DELETE' }
+      );
+      setSelectedCourse((previous) => ({
+        ...previous,
+        lessons: result.lessons || [],
+      }));
+      flash('Lesson removed successfully.');
+    } catch (error) {
+      flash(`Unable to remove lesson: ${error.message}`);
+    } finally {
+      setLessonSaving(false);
+    }
+
+  }
+
+  async function removeLessonVideo(lesson) {
+    setLessonSaving(true);
+    try {
+      const result = await request(
+        `/courses/${selectedCourse._id}/lessons/${lesson._id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            title: lesson.title,
+            description: lesson.description || '',
+            videoJobId: '',
+          }),
+        }
+      );
+      setSelectedCourse((previous) => ({
+        ...previous,
+        lessons: previous.lessons.map((item) =>
+          String(item._id) === String(lesson._id) ? result.lesson : item
+        ),
+      }));
+      flash('Lesson video removed successfully.');
+    } catch (error) {
+      flash(`Unable to remove lesson video: ${error.message}`);
+    } finally {
+      setLessonSaving(false);
     }
   }
 
@@ -1983,7 +2113,9 @@ export default function App() {
                       <button
                         className="course-action"
                         onClick={() => {
-                          if (Number(course.price || 0) > 0) {
+                          if (user?.role === 'instructor' || user?.role === 'admin') {
+                            openCourse(course);
+                          } else if (Number(course.price || 0) > 0) {
                             buyCourse(course);
                           } else {
                             enroll(course);
@@ -1991,7 +2123,11 @@ export default function App() {
                         }}
                         disabled={loading}
                       >
-                        {loading ? (
+                        {user?.role === 'instructor' || user?.role === 'admin' ? (
+                          <>
+                            View Course <ArrowRight size={15} />
+                          </>
+                        ) : loading ? (
                           'Please wait...'
                         ) : Number(course.price || 0) > 0 ? (
                           <>
@@ -2144,14 +2280,26 @@ export default function App() {
                 setSelectedCourse(null);
                 setSelectedQuiz(null);
                 setQuizResult(null);
-                setPage('My Learning');
+                setPage(
+                  user?.role === 'student' ? 'My Learning' : 'Explore'
+                );
               }}
             >
-              ← Back to My Learning
+              ← Back to {user?.role === 'student' ? 'My Learning' : 'Explore'}
             </button>
 
             <h1>{selectedCourse.title}</h1>
             <p>{selectedCourse.description}</p>
+
+            {(user?.role === 'instructor' || user?.role === 'admin') && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setPage('Manage Course Lessons')}
+              >
+                Manage course lessons
+              </button>
+            )}
 
             <p>
               Instructor: {selectedCourse.instructor?.name || 'Not available'}
@@ -2551,7 +2699,110 @@ export default function App() {
                 {selectedCourse && (
                   <div className="lesson-management-form">
                     <h2>Manage Lessons: {selectedCourse.title}</h2>
-                    <p>Add lessons and optionally upload their videos.</p>
+                    <p>Add lessons, update lesson content, or replace and remove videos.</p>
+
+                    {(selectedCourse.lessons || []).map((lesson, index) => (
+                      <article className="lesson-editor" key={lesson._id}>
+                        {editingLessonId === String(lesson._id) ? (
+                          <>
+                            <label className="lesson-field">
+                              <span>Lesson title</span>
+                              <input
+                                value={editingLessonForm.title}
+                                onChange={(event) =>
+                                  setEditingLessonForm((previous) => ({
+                                    ...previous,
+                                    title: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="lesson-field">
+                              <span>Lesson description</span>
+                              <textarea
+                                value={editingLessonForm.description}
+                                onChange={(event) =>
+                                  setEditingLessonForm((previous) => ({
+                                    ...previous,
+                                    description: event.target.value,
+                                  }))
+                                }
+                                rows={3}
+                              />
+                            </label>
+                            <label className="lesson-field">
+                              <span>Replace video (optional)</span>
+                              <input
+                                type="file"
+                                accept="video/mp4,video/quicktime,video/webm"
+                                onChange={(event) =>
+                                  setEditingLessonVideo(
+                                    event.target.files?.[0] || null
+                                  )
+                                }
+                              />
+                            </label>
+                            <div className="lesson-editor-actions">
+                              <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={() => saveLessonEdit(lesson)}
+                                disabled={lessonSaving || !editingLessonForm.title.trim()}
+                              >
+                                {lessonSaving ? 'Saving...' : 'Save changes'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => setEditingLessonId('')}
+                                disabled={lessonSaving}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="lesson-editor-summary">
+                            <div>
+                              <strong>
+                                {index + 1}. {lesson.title}
+                              </strong>
+                              <p>{lesson.description || 'No description available.'}</p>
+                              <small>
+                                {lesson.videoJobId ? 'Video attached' : 'No video attached'}
+                              </small>
+                            </div>
+                            <div className="lesson-editor-actions">
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => startLessonEdit(lesson)}
+                                disabled={lessonSaving}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => removeLessonVideo(lesson)}
+                                disabled={lessonSaving || !lesson.videoJobId}
+                              >
+                                Remove video
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-danger"
+                                onClick={() => removeLesson(lesson)}
+                                disabled={lessonSaving}
+                              >
+                                Remove lesson
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </article>
+                    ))}
+
                     <form
                           onSubmit={async (event) => {
                             event.preventDefault();
