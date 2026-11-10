@@ -1,36 +1,64 @@
-function parseRedisUrl(redisUrl) {
-  const url = new URL(redisUrl);
-  const connection = {
-    host: url.hostname,
-    port: Number(url.port || 6379),
-  };
 
-  if (url.username) connection.username = decodeURIComponent(url.username);
-  if (url.password) connection.password = decodeURIComponent(url.password);
-  if (url.protocol === 'rediss:') connection.tls = {};
+import IORedis from 'ioredis';
 
-  return connection;
+const redisUrl = process.env.REDIS_URL;
+
+if (!redisUrl) {
+  throw new Error('REDIS_URL environment variable is not configured');
 }
 
-export function redisConnection({ worker = false } = {}) {
-  const connection = process.env.REDIS_URL
-    ? parseRedisUrl(process.env.REDIS_URL)
-    : {
-        host: process.env.REDIS_HOST || '127.0.0.1',
-        port: Number(process.env.REDIS_PORT || 6379),
-        ...(process.env.REDIS_USERNAME
-          ? { username: process.env.REDIS_USERNAME }
-          : {}),
-        ...(process.env.REDIS_PASSWORD
-          ? { password: process.env.REDIS_PASSWORD }
-          : {}),
-        ...(process.env.REDIS_TLS === 'true' ? { tls: {} } : {}),
-      };
+function parseRedisUrl() {
+  const url = new URL(redisUrl);
 
   return {
-    ...connection,
-    connectTimeout: 10_000,
+    host: url.hostname,
+    port: Number(url.port || 6379),
+    username: url.username
+      ? decodeURIComponent(url.username)
+      : undefined,
+    password: url.password
+      ? decodeURIComponent(url.password)
+      : undefined,
+    ...(url.protocol === 'rediss:' ? { tls: {} } : {}),
+    connectTimeout: 10000,
+    retryStrategy: (attempt) => Math.min(attempt * 200, 2000),
+  };
+}
+
+// For regular Redis operations
+export function createRedisConnection() {
+  const redis = new IORedis(redisUrl, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+  });
+
+  redis.on('connect', () => {
+    console.log('Redis: Connecting...');
+  });
+
+  redis.on('ready', () => {
+    console.log('Redis: Connection established successfully!');
+  });
+
+  redis.on('error', (error) => {
+    console.error('Redis connection error:', error.message);
+  });
+
+  redis.ping()
+    .then((result) => {
+      console.log('Redis PING response:', result);
+    })
+    .catch((error) => {
+      console.error('Redis PING failed:', error.message);
+    });
+
+  return redis;
+}
+
+// For BullMQ queues and workers
+export function redisConnection({ worker = false } = {}) {
+  return {
+    ...parseRedisUrl(),
     maxRetriesPerRequest: worker ? null : 2,
-    retryStrategy: (attempt) => Math.min(attempt * 200, 2_000),
   };
 }
