@@ -23,3 +23,14 @@ const worker = new Worker('video-processing', async job => {
 }, { connection: redisConnection({ worker: true }), concurrency: 2 });
 worker.on('completed', job => console.log(`Video job ${job.id} completed`));
 worker.on('failed', (job, err) => console.error(`Video job ${job?.id} failed:`, err.message));
+worker.on('ready', () => {
+  console.log('Video worker connected to Redis and ready!');
+});
+
+worker.on('error', err => {
+  console.error('Video worker error:', err.message);
+});
+
+worker.on('active', job => {
+  console.log(`Processing video job ${job.id}`);
+});

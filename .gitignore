@@ -14,3 +14,109 @@ server/dist/
 # Logs
 *.log
 npm-debug.log*
+
+Count    : 149
+Average  : 
+Sum      : 
+Maximum  : 
+Minimum  : 
+Property : 
+
+IgnoreCase : True
+LineNumber : 21
+Line       : server/processed/11/index.m3u8
+Filename   : InputStream
+Path       : InputStream
+Pattern    : processed|uploads
+Context    : 
+Matches    : {0}
+
+IgnoreCase : True
+LineNumber : 22
+Line       : server/processed/11/segment_000.ts
+Filename   : InputStream
+Path       : InputStream
+Pattern    : processed|uploads
+Context    : 
+Matches    : {0}
+
+IgnoreCase : True
+LineNumber : 23
+Line       : server/processed/11/segment_001.ts
+Filename   : InputStream
+Path       : InputStream
+Pattern    : processed|uploads
+Context    : 
+Matches    : {0}
+
+IgnoreCase : True
+LineNumber : 24
+Line       : server/processed/11/segment_002.ts
+Filename   : InputStream
+Path       : InputStream
+Pattern    : processed|uploads
+Context    : 
+Matches    : {0}
+
+IgnoreCase : True
+LineNumber : 25
+Line       : server/processed/11/segment_003.ts
+Filename   : InputStream
+Path       : InputStream
+Pattern    : processed|uploads
+Context    : 
+Matches    : {0}
+
+IgnoreCase : True
+LineNumber : 26
+Line       : server/processed/11/segment_004.ts
+Filename   : InputStream
+Path       : InputStream
+Pattern    : processed|uploads
+Context    : 
+Matches    : {0}
+
+IgnoreCase : True
+LineNumber : 27
+Line       : server/processed/11/segment_005.ts
+Filename   : InputStream
+Path       : InputStream
+Pattern    : processed|uploads
+Context    : 
+Matches    : {0}
+
+IgnoreCase : True
+LineNumber : 28
+Line       : server/processed/12/index.m3u8
+Filename   : InputStream
+Path       : InputStream
+Pattern    : processed|uploads
+Context    : 
+Matches    : {0}
+
+IgnoreCase : True
+LineNumber : 29
+Line       : server/processed/12/segment_000.ts
+Filename   : InputStream
+Path       : InputStream
+Pattern    : processed|uploads
+Context    : 
+Matches    : {0}
+
+IgnoreCase : True
+LineNumber : 30
+Line       : server/processed/12/segment_001.ts
+Filename   : InputStream
+Path       : InputStream
+Pattern    : processed|uploads
+Context    : 
+Matches    : {0}
+
+# LearnLive video processing files
+server/processed/
+server/uploads/
+server/test-videos/
+
+# Temporary video files
+*.m3u8
+*.ts
