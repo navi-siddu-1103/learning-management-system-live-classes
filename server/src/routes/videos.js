@@ -90,7 +90,7 @@ router.get('/:jobId/playlist', requireAuth, async (req, res) => {
           return segment;
         }
 
-        return `/api/videos/${jobId}/segments/${encodeURIComponent(filename)}`;
+        return `segments/${encodeURIComponent(filename)}`;
       }
     );
 
