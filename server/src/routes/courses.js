@@ -257,7 +257,7 @@ router.post(
         title: title.trim(),
         description: description || '',
         videoUrl: verifiedVideoJobId
-          ? `/api/uploads/video/${verifiedVideoJobId}/playlist`
+          ? `/api/videos/${verifiedVideoJobId}/playlist`
           : '',
         videoJobId: verifiedVideoJobId,
         durationSeconds: Number(durationSeconds) || 0,
@@ -336,7 +336,7 @@ router.patch(
       if (videoJobId !== undefined) {
         lesson.videoJobId = String(videoJobId);
         lesson.videoUrl = videoJobId
-          ? `/api/uploads/video/${videoJobId}/playlist`
+          ? `/api/videos/${videoJobId}/playlist`
           : '';
       }
 

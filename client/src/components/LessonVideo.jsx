@@ -23,7 +23,7 @@ export default function LessonVideo({ videoJobId }) {
       return undefined;
     }
 
-    const playlistUrl = `${API}/uploads/video/${encodeURIComponent(videoJobId)}/playlist`;
+    const playlistUrl = `${API}/videos/${encodeURIComponent(videoJobId)}/playlist`;
     let hls = null;
     let cancelled = false;
     let retryTimer = null;
