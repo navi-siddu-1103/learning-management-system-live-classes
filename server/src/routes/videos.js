@@ -1,11 +1,16 @@
 import { Router } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
+import { Queue } from 'bullmq';
 import { requireAuth } from '../middleware/auth.js';
 import { Course, Enrollment } from '../models.js';
-import { processedDir } from '../videoStorage.js';
+import { playlistPath, processedDir } from '../videoStorage.js';
+import { redisConnection } from '../redis.js';
 
 const router = Router();
+const videoQueue = new Queue('video-processing', {
+  connection: redisConnection(),
+});
 
 // Check whether the user can access a course containing this video.
 async function canAccessVideo(req, jobId) {
@@ -50,13 +55,30 @@ router.get('/:jobId/playlist', requireAuth, async (req, res) => {
       return res.status(403).json({ message: 'You cannot access this video' });
     }
 
-    const playlistPath = path.join(processedDir, jobId, 'index.m3u8');
+    const playlistFile = playlistPath(jobId);
 
-    if (!fs.existsSync(playlistPath)) {
+    if (!fs.existsSync(playlistFile)) {
+      const job = await videoQueue.getJob(jobId);
+      const state = job ? await job.getState() : null;
+
+      if (state && !['completed', 'failed'].includes(state)) {
+        res.setHeader('Retry-After', '2');
+        return res.status(425).json({
+          message: 'Video is still being processed',
+          state,
+        });
+      }
+
+      if (state === 'failed') {
+        return res.status(409).json({
+          message: 'Video processing failed',
+        });
+      }
+
       return res.status(404).json({ message: 'Video playlist not found' });
     }
 
-    let playlist = fs.readFileSync(playlistPath, 'utf8');
+    let playlist = fs.readFileSync(playlistFile, 'utf8');
 
     // Route every HLS segment through the protected endpoint.
     playlist = playlist.replace(
