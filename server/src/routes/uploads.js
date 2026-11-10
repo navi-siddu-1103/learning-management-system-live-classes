@@ -258,7 +258,7 @@ router.get(
       const protectedPlaylist = playlist.replace(
         /^segment_(\d+)\.ts$/gm,
         (_match, number) =>
-          `/api/uploads/video/${jobId}/segments/segment_${number}.ts`
+          `segments/segment_${number}.ts`
       );
 
       res.setHeader(
