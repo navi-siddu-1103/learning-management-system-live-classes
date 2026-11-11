@@ -8,8 +8,15 @@ import { Course, Enrollment } from '../models.js';
 import { requireAuth, allowRoles } from '../middleware/auth.js';
 import { uploadDir, processedDir, playlistPath } from '../videoStorage.js';
 import { redisConnection } from '../redis.js';
+import {
+  S3Client,
+  PutObjectCommand,
+} from '@aws-sdk/client-s3';
 
 const router = Router();
+const s3 = new S3Client({
+  region: process.env.AWS_REGION,
+});
 
 fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -102,6 +109,8 @@ router.post(
   allowRoles('instructor', 'admin'),
   upload.single('video'),
   async (req, res) => {
+    let s3Key;
+
     try {
       if (!req.file) {
         return res.status(400).json({
@@ -109,46 +118,50 @@ router.post(
         });
       }
 
-      const job = await Promise.race([
-        videoQueue.add(
-          'convert-to-hls',
-          {
-            inputPath: path.resolve(req.file.path),
-            originalName: req.file.originalname,
-            uploadedBy: String(req.user.id),
+      s3Key = `originals/${Date.now()}-${req.file.filename}`;
+
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: process.env.S3_BUCKET,
+          Key: s3Key,
+          Body: fs.createReadStream(req.file.path),
+          ContentType: req.file.mimetype,
+        })
+      );
+
+      const job = await videoQueue.add(
+        'convert-to-hls',
+        {
+          inputKey: s3Key,
+          originalName: req.file.originalname,
+          uploadedBy: String(req.user.id),
+        },
+        {
+          attempts: 2,
+          backoff: {
+            type: 'exponential',
+            delay: 3000,
           },
-          {
-            attempts: 2,
-            backoff: {
-              type: 'exponential',
-              delay: 3000,
-            },
-            removeOnComplete: 100,
-            removeOnFail: 100,
-          }
-        ),
-        new Promise((_, reject) => {
-          setTimeout(
-            () => reject(new Error('Video-processing queue is unavailable.')),
-            15_000
-          );
-        }),
-      ]);
+          removeOnComplete: 100,
+          removeOnFail: 100,
+        }
+      );
 
       return res.status(202).json({
         jobId: String(job.id),
         status: 'queued',
-        message: 'Video uploaded and queued for HLS conversion.',
+        message: 'Video uploaded to S3 and queued for HLS conversion.',
       });
     } catch (error) {
       console.error('Video upload error:', error);
 
       return res.status(503).json({
-        message:
-          error.message === 'Video-processing queue is unavailable.'
-            ? error.message
-            : 'Unable to upload video.',
+        message: 'Unable to upload video.',
       });
+    } finally {
+      if (req.file?.path) {
+        await fs.promises.unlink(req.file.path).catch(() => {});
+      }
     }
   }
 );
@@ -227,7 +240,11 @@ router.get(
         });
       }
 
-      const playlistFile = playlistPath(jobId);
+      const segmentPath = path.join(
+        processedDir,
+        jobId,
+        filename
+      );
 
       if (!fs.existsSync(playlistFile)) {
         const job = await videoQueue.getJob(jobId);

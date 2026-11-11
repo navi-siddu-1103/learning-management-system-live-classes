@@ -9,7 +9,7 @@
     "worker": "node src/workers/videoWorker.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.800.0",
+    "@aws-sdk/client-s3": "^3.1166.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.40.0",
     "cors": "^2.8.5",
