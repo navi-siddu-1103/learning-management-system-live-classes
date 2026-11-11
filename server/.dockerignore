@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.*
+!.env.example
+
+processed/
+uploads/
+test-videos/
+
+.git/
+.gitignore
+
+npm-debug.log*
+*.log
+.DS_Store
